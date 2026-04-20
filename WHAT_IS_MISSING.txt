@@ -1,0 +1,74 @@
+================================================================================
+                     PIPELINE FAILURE - ROOT CAUSE ANALYSIS
+================================================================================
+
+CURRENT STATE:
+✅ Run Tests                  - PASSES
+✅ Build & Push Docker Image  - PASSES  
+❌ Deploy to Kubernetes       - FAILS with exit code 1
+
+================================================================================
+WHY IS DEPLOY FAILING?
+================================================================================
+
+The Deploy job needs to authenticate with your Kubernetes cluster.
+
+It does this by:
+1. Reading the KUBE_CONFIG secret from GitHub
+2. Decoding it from base64
+3. Setting up kubectl
+4. Running kubectl commands
+
+THE PROBLEM:
+============
+The KUBE_CONFIG secret is MISSING from GitHub!
+
+When the workflow runs:
+  echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+                           ↑
+                     RESOLVES TO EMPTY STRING!
+
+kubectl tries to start but has no config file → exits with code 1
+
+================================================================================
+THE FIX (Takes 2 minutes)
+================================================================================
+
+Step 1: Copy kubeconfig
+  - Check: FIX_PIPELINE_NOW.md (has the base64 string to copy)
+
+Step 2: Add to GitHub
+  - Go: https://github.com/ratnakarchakkapalli/simple-k8s-cicd/settings/secrets/actions
+  - Click: "New repository secret"
+  - Name: KUBE_CONFIG
+  - Value: (paste the base64 string)
+  - Click: "Add secret"
+
+Step 3: Test
+  - Push any commit to main
+  - Watch: https://github.com/ratnakarchakkapalli/simple-k8s-cicd/actions
+  - All 3 jobs should now pass ✅
+
+================================================================================
+WHAT HAPPENS AFTER FIX
+================================================================================
+
+CODE PUSH → GitHub Actions → Tests ✓ → Build & Push ✓ → Deploy ✓ → Pods Update ✓
+
+NO MORE MANUAL COMMANDS!
+
+Instead of:
+  kubectl apply -f k8s/deployment.yaml
+  kubectl rollout restart deployment/simple-k8s-cicd
+
+GitHub does it automatically! 🚀
+
+================================================================================
+CURRENT GITHUB SECRETS
+================================================================================
+
+✅ DOCKER_PASSWORD          - Already set (for Docker Hub login)
+❌ KUBE_CONFIG              - MISSING (needed for K8s deployment)
+⚠️  DOCKER_USERNAME         - Not needed (hardcoded in workflow)
+
+================================================================================
