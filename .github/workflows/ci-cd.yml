@@ -83,14 +83,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: 📝 Deployment Info
+      - name: Set up kubectl
         run: |
-          echo "Deployment triggered for commit: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref }}"
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      
+      - name: Apply Kubernetes deployment
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+      
+      - name: Trigger rolling restart
+        run: |
+          kubectl rollout restart deployment/simple-k8s-cicd
+      
+      - name: Wait for rollout to complete
+        run: |
+          kubectl rollout status deployment/simple-k8s-cicd --timeout=5m
+      
+      - name: ✅ Deployment completed
+        run: |
+          echo "Deployment completed for commit: ${{ github.sha }}"
+          echo "New pods are running with the latest image"
           echo ""
-          echo "Next steps (run on your K8s cluster):"
-          echo "1. kubectl apply -f k8s/deployment.yaml"
-          echo "2. kubectl rollout restart deployment/simple-k8s-cicd"
-          echo "3. kubectl port-forward svc/simple-k8s-cicd-service 8080:80"
-          echo ""
+          echo "To access the application:"
+          echo "kubectl port-forward svc/simple-k8s-cicd-service 8080:80"
           echo "Then visit: http://localhost:8080"
+          echo ""
+          echo "To check pod status:"
+          echo "kubectl get pods -l app=simple-k8s-cicd"
