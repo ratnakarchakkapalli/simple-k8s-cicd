@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-k8s-cicd
+  namespace: default
+  labels:
+    app: simple-k8s-cicd
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: simple-k8s-cicd
+  template:
+    metadata:
+      labels:
+        app: simple-k8s-cicd
+    spec:
+      containers:
+      - name: web
+        image: ratnakar99/simple-k8s-cicd:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        
+        # Liveness probe - checks if container is alive
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # Readiness probe - checks if container is ready for traffic
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 2
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-k8s-cicd-service
+  namespace: default
+  labels:
+    app: simple-k8s-cicd
+spec:
+  type: NodePort
+  selector:
+    app: simple-k8s-cicd
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30080
