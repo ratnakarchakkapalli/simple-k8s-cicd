@@ -83,32 +83,45 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up kubectl
+      - name: Set up kubectl with kubeconfig
+        if: secrets.KUBE_CONFIG != ''
         run: |
           mkdir -p $HOME/.kube
           echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
       
       - name: Apply Kubernetes deployment
+        if: secrets.KUBE_CONFIG != ''
         run: |
           kubectl apply -f k8s/deployment.yaml
       
       - name: Trigger rolling restart
+        if: secrets.KUBE_CONFIG != ''
         run: |
           kubectl rollout restart deployment/simple-k8s-cicd
       
       - name: Wait for rollout to complete
+        if: secrets.KUBE_CONFIG != ''
         run: |
           kubectl rollout status deployment/simple-k8s-cicd --timeout=5m
       
       - name: ✅ Deployment completed
+        if: secrets.KUBE_CONFIG != ''
         run: |
-          echo "Deployment completed for commit: ${{ github.sha }}"
+          echo "✅ Deployment completed for commit: ${{ github.sha }}"
           echo "New pods are running with the latest image"
+      
+      - name: ⚠️ Deployment skipped - KUBE_CONFIG secret not set
+        if: secrets.KUBE_CONFIG == ''
+        run: |
+          echo "⚠️ KUBE_CONFIG secret is not configured"
+          echo "Docker image has been built and pushed to Docker Hub"
           echo ""
-          echo "To access the application:"
-          echo "kubectl port-forward svc/simple-k8s-cicd-service 8080:80"
-          echo "Then visit: http://localhost:8080"
+          echo "To enable automatic Kubernetes deployment:"
+          echo "1. Get your kubeconfig (base64 encoded)"
+          echo "2. Go to: https://github.com/ratnakarchakkapalli/simple-k8s-cicd/settings/secrets/actions"
+          echo "3. Add new secret 'KUBE_CONFIG' with the encoded value"
           echo ""
-          echo "To check pod status:"
-          echo "kubectl get pods -l app=simple-k8s-cicd"
+          echo "For now, deploy manually:"
+          echo "  kubectl apply -f k8s/deployment.yaml"
+          echo "  kubectl rollout restart deployment/simple-k8s-cicd"
