@@ -81,14 +81,60 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: ℹ️ Docker image has been pushed to Docker Hub
+      - name: Check if KUBE_CONFIG exists
+        id: check_secret
         run: |
-          echo "✅ Docker image successfully built and pushed!"
-          echo "Image: ratnakar99/simple-k8s-cicd:latest"
+          if [ -z "${{ secrets.KUBE_CONFIG }}" ]; then
+            echo "has_secret=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_secret=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set up kubectl with kubeconfig
+        if: steps.check_secret.outputs.has_secret == 'true'
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      
+      - name: Apply Kubernetes deployment
+        if: steps.check_secret.outputs.has_secret == 'true'
+        run: kubectl apply -f k8s/deployment.yaml
+      
+      - name: Trigger rolling restart
+        if: steps.check_secret.outputs.has_secret == 'true'
+        run: kubectl rollout restart deployment/simple-k8s-cicd
+      
+      - name: Wait for rollout to complete
+        if: steps.check_secret.outputs.has_secret == 'true'
+        run: kubectl rollout status deployment/simple-k8s-cicd --timeout=5m
+      
+      - name: ✅ Deployment completed successfully
+        if: steps.check_secret.outputs.has_secret == 'true'
+        run: |
+          echo "✅ Kubernetes deployment completed!"
+          echo "Pods are being updated with the latest image"
+      
+      - name: ⚠️ KUBE_CONFIG secret not found - showing manual instructions
+        if: steps.check_secret.outputs.has_secret == 'false'
+        run: |
+          echo "⚠️ KUBE_CONFIG secret not configured"
           echo ""
-          echo "For automatic Kubernetes deployment:"
-          echo "1. Add KUBE_CONFIG secret to GitHub: https://github.com/ratnakarchakkapalli/simple-k8s-cicd/settings/secrets/actions"
-          echo "2. Then run these commands to deploy manually (for now):"
+          echo "Docker image has been built and pushed to Docker Hub:"
+          echo "  Image: ratnakar99/simple-k8s-cicd:latest"
           echo ""
-          echo "kubectl apply -f k8s/deployment.yaml"
-          echo "kubectl rollout restart deployment/simple-k8s-cicd"
+          echo "To enable FULLY AUTOMATED deployment:"
+          echo "1. Get your kubeconfig (base64-encoded)"
+          echo "2. Go to GitHub Settings: https://github.com/ratnakarchakkapalli/simple-k8s-cicd/settings/secrets/actions"
+          echo "3. Create new secret named: KUBE_CONFIG"
+          echo "4. Paste your encoded kubeconfig"
+          echo ""
+          echo "Then the next push will automatically:"
+          echo "  • Build Docker image"
+          echo "  • Push to Docker Hub"
+          echo "  • Deploy to Kubernetes"
+          echo "  • Restart pods with new image"
+          echo ""
+          echo "For now, deploy manually:"
+          echo "  kubectl apply -f k8s/deployment.yaml"
+          echo "  kubectl rollout restart deployment/simple-k8s-cicd"
